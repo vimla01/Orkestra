@@ -1,0 +1,8 @@
+server:
+  port: 8080
+
+health:
+  pollIntervalSeconds: 30
+
+log:
+  level: info
