@@ -12,6 +12,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+// checkClusterTimeout bounds how long a single cluster's health check may
+// run, so one unresponsive cluster can't stall the rest of a poll cycle.
+const checkClusterTimeout = 10 * time.Second
+
 // Aggregator continuously monitors the health of registered Kubernetes clusters
 // by polling node status and updating the registry with health information.
 type Aggregator struct {
@@ -82,6 +86,9 @@ func (a *Aggregator) CheckCluster(ctx context.Context, name string) error {
 // checkCluster performs the actual health check for a single cluster.
 func (a *Aggregator) checkCluster(ctx context.Context, cluster *registry.ClusterInfo) {
 	logger := a.logger.WithField("cluster", cluster.Name)
+
+	ctx, cancel := context.WithTimeout(ctx, checkClusterTimeout)
+	defer cancel()
 
 	clientset, err := a.clientFactory(cluster.KubeconfigPath)
 	if err != nil {

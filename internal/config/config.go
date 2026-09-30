@@ -50,7 +50,7 @@ func Load(path string) (*Config, error) {
 	if cfg.Server.Port == 0 {
 		cfg.Server.Port = 8080
 	}
-	if cfg.Health.PollIntervalSeconds == 0 {
+	if cfg.Health.PollIntervalSeconds <= 0 {
 		cfg.Health.PollIntervalSeconds = 30
 	}
 	if cfg.Log.Level == "" {

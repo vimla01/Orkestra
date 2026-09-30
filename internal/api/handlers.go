@@ -1,11 +1,19 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/orkestra/internal/registry"
 )
+
+// healthCheckTimeout bounds how long an on-demand health check may run,
+// independent of the inbound request's lifetime.
+const healthCheckTimeout = 10 * time.Second
 
 // RegisterClusterRequest is the JSON body for cluster registration.
 type RegisterClusterRequest struct {
@@ -37,8 +45,7 @@ func (s *Server) handleRegisterCluster(w http.ResponseWriter, r *http.Request) {
 
 	cluster, err := s.registry.Register(req.Name, req.KubeconfigPath)
 	if err != nil {
-		// Check if it's a duplicate registration
-		if existing, _ := s.registry.Get(req.Name); existing != nil {
+		if errors.Is(err, registry.ErrClusterExists) {
 			respondError(w, http.StatusConflict, "cluster already registered: "+req.Name)
 			return
 		}
@@ -92,8 +99,11 @@ func (s *Server) handleTriggerHealthCheck(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Trigger health check
-	if err := s.aggregator.CheckCluster(r.Context(), name); err != nil {
+	// Trigger health check on a context detached from the inbound request,
+	// so a client disconnect/timeout doesn't get recorded as a real failure.
+	ctx, cancel := context.WithTimeout(context.Background(), healthCheckTimeout)
+	defer cancel()
+	if err := s.aggregator.CheckCluster(ctx, name); err != nil {
 		s.logger.WithField("cluster", name).WithError(err).Warn("Health check failed")
 	}
 
@@ -110,12 +120,20 @@ func (s *Server) handleTriggerHealthCheck(w http.ResponseWriter, r *http.Request
 // respondJSON writes a JSON response with the given status code.
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if data != nil {
-		if err := json.NewEncoder(w).Encode(data); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+	if data == nil {
+		w.WriteHeader(status)
+		return
 	}
+
+	// Marshal before writing the header so an encoding failure can still
+	// produce a clean error response instead of a malformed one.
+	body, err := json.Marshal(data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(status)
+	w.Write(body)
 }
 
 // respondError writes a JSON error response.

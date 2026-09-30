@@ -1,14 +1,19 @@
 package registry
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/orkestra/internal/k8s"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 )
+
+// ErrClusterExists is returned by Register when a cluster with the given
+// name is already present in the registry.
+var ErrClusterExists = errors.New("cluster already registered")
 
 // Registry is a thread-safe in-memory store of registered Kubernetes clusters.
 type Registry struct {
@@ -33,12 +38,13 @@ func NewRegistry(clientFactory func(string) (kubernetes.Interface, error)) *Regi
 // verify basic connectivity (ServerVersion), and extracts the API server
 // endpoint from the kubeconfig. The initial status is set to "Unknown".
 func (r *Registry) Register(name, kubeconfigPath string) (*ClusterInfo, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	// Check for duplicate registration.
-	if _, exists := r.clusters[name]; exists {
-		return nil, fmt.Errorf("cluster %q is already registered", name)
+	// Check for duplicate registration up front, without holding the lock
+	// across the network calls below.
+	r.mu.RLock()
+	_, exists := r.clusters[name]
+	r.mu.RUnlock()
+	if exists {
+		return nil, fmt.Errorf("cluster %q: %w", name, ErrClusterExists)
 	}
 
 	// Validate that the kubeconfig file exists on disk.
@@ -56,7 +62,7 @@ func (r *Registry) Register(name, kubeconfigPath string) (*ClusterInfo, error) {
 	}
 
 	// Extract the API server endpoint from the kubeconfig.
-	endpoint, err := extractEndpoint(kubeconfigPath)
+	endpoint, err := k8s.GetServerEndpoint(kubeconfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract endpoint for cluster %q: %w", name, err)
 	}
@@ -69,6 +75,11 @@ func (r *Registry) Register(name, kubeconfigPath string) (*ClusterInfo, error) {
 		Endpoint:       endpoint,
 	}
 
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.clusters[name]; exists {
+		return nil, fmt.Errorf("cluster %q: %w", name, ErrClusterExists)
+	}
 	r.clusters[name] = info
 	return info, nil
 }
@@ -96,7 +107,8 @@ func (r *Registry) Get(name string) (*ClusterInfo, error) {
 	if !exists {
 		return nil, fmt.Errorf("cluster %q not found", name)
 	}
-	return info, nil
+	infoCopy := *info
+	return &infoCopy, nil
 }
 
 // List returns a snapshot copy of all registered clusters.
@@ -106,7 +118,8 @@ func (r *Registry) List() []*ClusterInfo {
 
 	result := make([]*ClusterInfo, 0, len(r.clusters))
 	for _, info := range r.clusters {
-		result = append(result, info)
+		infoCopy := *info
+		result = append(result, &infoCopy)
 	}
 	return result
 }
@@ -127,19 +140,4 @@ func (r *Registry) UpdateHealth(name string, status string, nodeCount, readyNode
 	info.ReadyNodes = readyNodes
 	info.LastHealthCheck = time.Now()
 	return nil
-}
-
-// extractEndpoint loads a kubeconfig file and returns the Server URL of the
-// first cluster defined in it.
-func extractEndpoint(kubeconfigPath string) (string, error) {
-	config, err := clientcmd.LoadFromFile(kubeconfigPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to load kubeconfig: %w", err)
-	}
-
-	for _, cluster := range config.Clusters {
-		return cluster.Server, nil
-	}
-
-	return "", fmt.Errorf("no clusters found in kubeconfig %q", kubeconfigPath)
 }
