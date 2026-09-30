@@ -14,9 +14,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// applyTimeout bounds how long applying to a single cluster may take, so one
-// unresponsive cluster can't stall propagation to the rest.
-const applyTimeout = 15 * time.Second
+// clusterTimeout bounds how long a call to a single cluster may take, so one
+// unresponsive cluster can't stall the rest. It stays below the API server's
+// 15s write timeout so a propagation request can still respond in time.
+const clusterTimeout = 10 * time.Second
 
 // ManagedByLabel marks resources that Orkestra propagated to member clusters.
 const ManagedByLabel = "app.kubernetes.io/managed-by"
@@ -38,11 +39,15 @@ type ClusterResult struct {
 	Error   string `json:"error,omitempty"`
 }
 
-// Engine propagates Deployments from the control plane to member clusters.
+// Engine propagates Deployments from the control plane to member clusters
+// and remembers each propagation so its status can be queried later.
 type Engine struct {
 	registry      *registry.Registry
 	clientFactory func(string) (kubernetes.Interface, error)
 	logger        *logrus.Logger
+
+	mu      sync.RWMutex
+	records map[string]*Record // keyed by namespace/name
 }
 
 // NewEngine creates a new propagation Engine with the given dependencies.
@@ -55,6 +60,7 @@ func NewEngine(
 		registry:      registry,
 		clientFactory: clientFactory,
 		logger:        logger,
+		records:       make(map[string]*Record),
 	}
 }
 
@@ -65,7 +71,8 @@ func NewEngine(
 // applied, so an unknown cluster name fails the whole request rather than
 // leaving a partial rollout. Once applying starts, a failure on one cluster
 // does not stop the others; per-cluster outcomes are returned in the same
-// order as clusterNames.
+// order as clusterNames, and the propagation is recorded (replacing any
+// earlier record for the same deployment).
 func (e *Engine) Propagate(ctx context.Context, deployment *appsv1.Deployment, clusterNames []string) ([]ClusterResult, error) {
 	if len(clusterNames) == 0 {
 		return nil, fmt.Errorf("at least one target cluster is required")
@@ -97,6 +104,7 @@ func (e *Engine) Propagate(ctx context.Context, deployment *appsv1.Deployment, c
 	}
 	wg.Wait()
 
+	e.saveRecord(deployment, clusterNames, results)
 	return results, nil
 }
 
@@ -107,7 +115,7 @@ func (e *Engine) applyToCluster(ctx context.Context, deployment *appsv1.Deployme
 		"deployment": deployment.Namespace + "/" + deployment.Name,
 	})
 
-	ctx, cancel := context.WithTimeout(ctx, applyTimeout)
+	ctx, cancel := context.WithTimeout(ctx, clusterTimeout)
 	defer cancel()
 
 	result := ClusterResult{Cluster: cluster.Name}

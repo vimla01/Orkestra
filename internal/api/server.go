@@ -8,6 +8,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/orkestra/internal/health"
+	"github.com/orkestra/internal/propagation"
 	"github.com/orkestra/internal/registry"
 	"github.com/sirupsen/logrus"
 )
@@ -17,17 +18,19 @@ import (
 type Server struct {
 	registry   *registry.Registry
 	aggregator *health.Aggregator
+	engine     *propagation.Engine
 	httpServer *http.Server
 	logger     *logrus.Logger
 }
 
 // NewServer creates a new API Server on the given port with the provided
-// registry and health aggregator. It configures routing, middleware, and
+// registry, health aggregator, and propagation engine. It configures routing, middleware, and
 // HTTP server timeouts.
-func NewServer(port int, reg *registry.Registry, agg *health.Aggregator, logger *logrus.Logger) *Server {
+func NewServer(port int, reg *registry.Registry, agg *health.Aggregator, engine *propagation.Engine, logger *logrus.Logger) *Server {
 	s := &Server{
 		registry:   reg,
 		aggregator: agg,
+		engine:     engine,
 		logger:     logger,
 	}
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/orkestra/internal/health"
+	"github.com/orkestra/internal/propagation"
 	"github.com/orkestra/internal/registry"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
@@ -57,7 +58,8 @@ func setupTestServer(t *testing.T) (*Server, string) {
 
 	reg := registry.NewRegistry(fakeFactory)
 	agg := health.NewAggregator(reg, fakeFactory, 0, logger)
-	srv := NewServer(0, reg, agg, logger)
+	engine := propagation.NewEngine(reg, fakeFactory, logger)
+	srv := NewServer(0, reg, agg, engine, logger)
 
 	return srv, kubeconfigPath
 }

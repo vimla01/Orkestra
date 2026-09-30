@@ -16,6 +16,7 @@ import (
 	"github.com/orkestra/internal/config"
 	"github.com/orkestra/internal/health"
 	"github.com/orkestra/internal/k8s"
+	"github.com/orkestra/internal/propagation"
 	"github.com/orkestra/internal/registry"
 )
 
@@ -69,8 +70,11 @@ func main() {
 	healthInterval := time.Duration(cfg.Health.PollIntervalSeconds) * time.Second
 	aggregator := health.NewAggregator(reg, clientFactory, healthInterval, logger)
 
+	// Create propagation engine
+	engine := propagation.NewEngine(reg, clientFactory, logger)
+
 	// Create API server
-	server := api.NewServer(cfg.Server.Port, reg, aggregator, logger)
+	server := api.NewServer(cfg.Server.Port, reg, aggregator, engine, logger)
 
 	// Print startup banner
 	printBanner()

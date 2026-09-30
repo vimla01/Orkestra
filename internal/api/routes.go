@@ -15,4 +15,9 @@ func registerRoutes(s *Server, r *mux.Router) {
 
 	// On-demand health check endpoint.
 	r.HandleFunc("/api/v1/clusters/{name}/healthcheck", s.handleTriggerHealthCheck).Methods("POST")
+
+	// Deployment propagation endpoints.
+	r.HandleFunc("/api/v1/deployments", s.handlePropagateDeployment).Methods("POST")
+	r.HandleFunc("/api/v1/deployments", s.handleListDeployments).Methods("GET")
+	r.HandleFunc("/api/v1/deployments/{namespace}/{name}", s.handleGetDeploymentStatus).Methods("GET")
 }
