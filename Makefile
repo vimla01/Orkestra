@@ -1,4 +1,4 @@
-.PHONY: build run test lint docker-build clean
+.PHONY: build run test lint docker-build clean demo-up demo demo-server demo-down
 
 build:
 	go build -o bin/orkestra ./cmd/orkestra
@@ -17,3 +17,16 @@ docker-build:
 
 clean:
 	rm -rf bin/
+
+# Local multi-cluster demo on kind (requires docker and kind).
+demo-up:
+	./hack/demo/up.sh
+
+demo:
+	./hack/demo/run.sh
+
+demo-server: build
+	./bin/orkestra serve --config hack/demo/config.yaml
+
+demo-down:
+	./hack/demo/down.sh

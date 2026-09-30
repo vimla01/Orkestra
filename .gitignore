@@ -12,6 +12,7 @@ coverage.out
 
 # Local control plane state
 data/
+.demo/
 
 # Vendor
 vendor/

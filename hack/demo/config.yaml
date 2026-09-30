@@ -1,0 +1,17 @@
+# Control plane config for the local kind demo: fast polling and a short
+# grace period so failover is visible within about a minute.
+server:
+  port: 8080
+
+health:
+  pollIntervalSeconds: 5
+
+failover:
+  enabled: true
+  gracePeriodSeconds: 15
+
+storage:
+  path: .demo/state.json
+
+log:
+  level: info

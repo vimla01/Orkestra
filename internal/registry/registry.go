@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -158,7 +159,7 @@ func (r *Registry) Get(name string) (*ClusterInfo, error) {
 	return &infoCopy, nil
 }
 
-// List returns a snapshot copy of all registered clusters.
+// List returns a snapshot copy of all registered clusters, sorted by name.
 func (r *Registry) List() []*ClusterInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -168,6 +169,7 @@ func (r *Registry) List() []*ClusterInfo {
 		infoCopy := *info
 		result = append(result, &infoCopy)
 	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result
 }
 
