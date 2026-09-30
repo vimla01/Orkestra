@@ -52,6 +52,12 @@ func NewServer(port int, reg *registry.Registry, agg *health.Aggregator, engine 
 	return s
 }
 
+// Handler returns the server's HTTP handler with all routes and middleware,
+// for use in tests or when embedding the API in another server.
+func (s *Server) Handler() http.Handler {
+	return s.httpServer.Handler
+}
+
 // Start begins listening for HTTP requests. It blocks until the server
 // encounters an error or is shut down.
 func (s *Server) Start() error {

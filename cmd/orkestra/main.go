@@ -30,6 +30,12 @@ func main() {
 		case "deploy":
 			handleDeployCommand(os.Args[2:])
 			return
+		case "deployment":
+			handleDeploymentCommand(os.Args[2:])
+			return
+		case "serve":
+			// Drop the subcommand so the server flags below still parse.
+			os.Args = append(os.Args[:1], os.Args[2:]...)
 		case "help", "--help", "-h":
 			printUsage()
 			return
