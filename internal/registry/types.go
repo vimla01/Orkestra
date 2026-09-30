@@ -2,6 +2,13 @@ package registry
 
 import "time"
 
+// Cluster health statuses.
+const (
+	StatusHealthy   = "Healthy"
+	StatusUnhealthy = "Unhealthy"
+	StatusUnknown   = "Unknown"
+)
+
 // ClusterInfo represents a registered Kubernetes cluster and its health state.
 type ClusterInfo struct {
 	// Name is the unique identifier for this cluster.
@@ -25,6 +32,10 @@ type ClusterInfo struct {
 
 	// ReadyNodes is the number of nodes in a Ready condition.
 	ReadyNodes int `json:"readyNodes"`
+
+	// UnhealthySince is when the cluster most recently turned Unhealthy.
+	// It is zero while the cluster is not Unhealthy.
+	UnhealthySince time.Time `json:"unhealthySince,omitempty"`
 
 	// Endpoint is the Kubernetes API server URL.
 	Endpoint string `json:"endpoint"`

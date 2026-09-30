@@ -16,6 +16,16 @@ type HealthConfig struct {
 	PollIntervalSeconds int `yaml:"pollIntervalSeconds"`
 }
 
+// FailoverConfig controls moving deployments off unhealthy clusters.
+type FailoverConfig struct {
+	// Enabled turns on the failover controller. It is off unless set.
+	Enabled bool `yaml:"enabled"`
+
+	// GracePeriodSeconds is how long a cluster must stay Unhealthy before
+	// its deployments are moved elsewhere.
+	GracePeriodSeconds int `yaml:"gracePeriodSeconds"`
+}
+
 // LogConfig holds logging configuration.
 type LogConfig struct {
 	Level string `yaml:"level"`
@@ -23,9 +33,10 @@ type LogConfig struct {
 
 // Config is the top-level configuration for Orkestra.
 type Config struct {
-	Server ServerConfig `yaml:"server"`
-	Health HealthConfig `yaml:"health"`
-	Log    LogConfig    `yaml:"log"`
+	Server   ServerConfig   `yaml:"server"`
+	Health   HealthConfig   `yaml:"health"`
+	Failover FailoverConfig `yaml:"failover"`
+	Log      LogConfig      `yaml:"log"`
 }
 
 // Load reads a YAML configuration file from path and returns a Config
@@ -34,6 +45,7 @@ type Config struct {
 // Defaults:
 //   - Server.Port: 8080
 //   - Health.PollIntervalSeconds: 30
+//   - Failover.GracePeriodSeconds: 60
 //   - Log.Level: "info"
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -52,6 +64,9 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Health.PollIntervalSeconds <= 0 {
 		cfg.Health.PollIntervalSeconds = 30
+	}
+	if cfg.Failover.GracePeriodSeconds <= 0 {
+		cfg.Failover.GracePeriodSeconds = 60
 	}
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = "info"

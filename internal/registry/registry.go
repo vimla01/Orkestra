@@ -70,7 +70,7 @@ func (r *Registry) Register(name, kubeconfigPath string) (*ClusterInfo, error) {
 	info := &ClusterInfo{
 		Name:           name,
 		KubeconfigPath: kubeconfigPath,
-		Status:         "Unknown",
+		Status:         StatusUnknown,
 		RegisteredAt:   time.Now(),
 		Endpoint:       endpoint,
 	}
@@ -125,7 +125,8 @@ func (r *Registry) List() []*ClusterInfo {
 }
 
 // UpdateHealth updates the health status and node counts for a registered
-// cluster. The LastHealthCheck timestamp is set to the current time.
+// cluster. The LastHealthCheck timestamp is set to the current time, and
+// UnhealthySince records when the cluster entered the Unhealthy state.
 func (r *Registry) UpdateHealth(name string, status string, nodeCount, readyNodes int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -133,6 +134,13 @@ func (r *Registry) UpdateHealth(name string, status string, nodeCount, readyNode
 	info, exists := r.clusters[name]
 	if !exists {
 		return fmt.Errorf("cluster %q not found", name)
+	}
+
+	switch {
+	case status != StatusUnhealthy:
+		info.UnhealthySince = time.Time{}
+	case info.Status != StatusUnhealthy:
+		info.UnhealthySince = time.Now()
 	}
 
 	info.Status = status

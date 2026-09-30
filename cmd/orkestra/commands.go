@@ -236,6 +236,16 @@ func handleDeploymentCommand(args []string) {
 		}
 		tw.Flush()
 
+		if len(status.Failovers) > 0 {
+			fmt.Println("\nFailovers:")
+			for _, f := range status.Failovers {
+				fmt.Printf("  %s  %s -> %s (%s)\n", formatTime(f.At), f.From, f.To, f.Reason)
+				if f.CleanupError != "" {
+					fmt.Printf("    ⚠️  could not remove from %s: %s\n", f.From, f.CleanupError)
+				}
+			}
+		}
+
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown deployment subcommand: %s\n\n", args[0])
 		printDeploymentUsage()

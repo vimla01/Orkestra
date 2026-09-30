@@ -201,3 +201,38 @@ func TestUpdateHealth(t *testing.T) {
 		t.Error("expected LastHealthCheck to be set")
 	}
 }
+
+func TestUpdateHealthTracksUnhealthySince(t *testing.T) {
+	r := NewRegistry(mockClientFactory)
+	kubeconfig := writeTempKubeconfig(t)
+
+	if _, err := r.Register("flaky", kubeconfig); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	if err := r.UpdateHealth("flaky", StatusUnhealthy, 1, 0); err != nil {
+		t.Fatalf("UpdateHealth failed: %v", err)
+	}
+	first, _ := r.Get("flaky")
+	if first.UnhealthySince.IsZero() {
+		t.Fatal("expected UnhealthySince to be set when turning Unhealthy")
+	}
+
+	// Staying Unhealthy must not reset the timer.
+	if err := r.UpdateHealth("flaky", StatusUnhealthy, 1, 0); err != nil {
+		t.Fatalf("UpdateHealth failed: %v", err)
+	}
+	second, _ := r.Get("flaky")
+	if !second.UnhealthySince.Equal(first.UnhealthySince) {
+		t.Errorf("UnhealthySince changed from %v to %v while still Unhealthy", first.UnhealthySince, second.UnhealthySince)
+	}
+
+	// Recovering clears it.
+	if err := r.UpdateHealth("flaky", StatusHealthy, 1, 1); err != nil {
+		t.Fatalf("UpdateHealth failed: %v", err)
+	}
+	recovered, _ := r.Get("flaky")
+	if !recovered.UnhealthySince.IsZero() {
+		t.Errorf("expected UnhealthySince cleared on recovery, got %v", recovered.UnhealthySince)
+	}
+}

@@ -25,6 +25,10 @@ type Record struct {
 	Results      []ClusterResult `json:"results"`
 	PropagatedAt time.Time       `json:"propagatedAt"`
 
+	// Failovers lists every time the deployment was moved off an unhealthy
+	// cluster since it was last propagated.
+	Failovers []FailoverEvent `json:"failovers,omitempty"`
+
 	// Deployment is the manifest that was applied. It is kept so the
 	// deployment can be re-propagated later; it is omitted from API output.
 	Deployment *appsv1.Deployment `json:"-"`
@@ -74,6 +78,7 @@ func copyRecord(r *Record) Record {
 	c := *r
 	c.Clusters = append([]string(nil), r.Clusters...)
 	c.Results = append([]ClusterResult(nil), r.Results...)
+	c.Failovers = append([]FailoverEvent(nil), r.Failovers...)
 	c.Deployment = r.Deployment.DeepCopy()
 	return c
 }

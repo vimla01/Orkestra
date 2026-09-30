@@ -4,5 +4,9 @@ server:
 health:
   pollIntervalSeconds: 30
 
+failover:
+  enabled: true
+  gracePeriodSeconds: 60
+
 log:
   level: info

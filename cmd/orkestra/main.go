@@ -93,6 +93,12 @@ func main() {
 	// Start health aggregator
 	aggregator.Start(ctx)
 
+	// Start failover controller, reconciling after each health poll interval
+	if cfg.Failover.Enabled {
+		gracePeriod := time.Duration(cfg.Failover.GracePeriodSeconds) * time.Second
+		engine.StartFailover(ctx, healthInterval, gracePeriod)
+	}
+
 	// Start API server in a goroutine
 	go func() {
 		if err := server.Start(); err != nil {

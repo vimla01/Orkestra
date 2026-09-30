@@ -93,7 +93,7 @@ func (a *Aggregator) checkCluster(ctx context.Context, cluster *registry.Cluster
 	clientset, err := a.clientFactory(cluster.KubeconfigPath)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create client for cluster")
-		if updateErr := a.registry.UpdateHealth(cluster.Name, "Unhealthy", 0, 0); updateErr != nil {
+		if updateErr := a.registry.UpdateHealth(cluster.Name, registry.StatusUnhealthy, 0, 0); updateErr != nil {
 			logger.WithError(updateErr).Error("Failed to update health status")
 		}
 		return
@@ -102,7 +102,7 @@ func (a *Aggregator) checkCluster(ctx context.Context, cluster *registry.Cluster
 	nodeList, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		logger.WithError(err).Error("Failed to list nodes for cluster")
-		if updateErr := a.registry.UpdateHealth(cluster.Name, "Unhealthy", 0, 0); updateErr != nil {
+		if updateErr := a.registry.UpdateHealth(cluster.Name, registry.StatusUnhealthy, 0, 0); updateErr != nil {
 			logger.WithError(updateErr).Error("Failed to update health status")
 		}
 		return
@@ -111,9 +111,9 @@ func (a *Aggregator) checkCluster(ctx context.Context, cluster *registry.Cluster
 	totalNodes := len(nodeList.Items)
 	readyNodes := countReadyNodes(nodeList.Items)
 
-	status := "Healthy"
+	status := registry.StatusHealthy
 	if readyNodes == 0 {
-		status = "Unhealthy"
+		status = registry.StatusUnhealthy
 	}
 
 	if err := a.registry.UpdateHealth(cluster.Name, status, totalNodes, readyNodes); err != nil {
