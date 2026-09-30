@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -107,6 +108,14 @@ func main() {
 
 	// Create API server
 	server := api.NewServer(cfg.Server.Port, reg, aggregator, engine, logger)
+	if dir := cfg.Server.DashboardDir; dir != "" {
+		if _, err := os.Stat(filepath.Join(dir, "index.html")); err != nil {
+			logger.Warnf("Dashboard not found in %s; run 'make dashboard' to build it. Serving the API only.", dir)
+		} else {
+			server.ServeDashboard(dir)
+			logger.Infof("Serving dashboard at http://localhost:%d/", cfg.Server.Port)
+		}
+	}
 
 	// Print startup banner
 	printBanner()

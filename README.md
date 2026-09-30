@@ -20,6 +20,7 @@ This project was built to explore the internals of multi-cluster Kubernetes mana
 - **Health Monitoring** - Clusters are polled continuously for node readiness. Each check is bounded by a timeout so one unresponsive cluster can't stall the rest.
 - **Automatic Failover** - When a cluster stays Unhealthy past a grace period, its deployments are moved to the healthy cluster with the most ready nodes. The new copy is applied *before* the old one is removed, and every move is recorded.
 - **Persistent State** - Registered clusters, propagation records and failover history are saved atomically to disk and restored on restart.
+- **Live Dashboard** - A React UI showing cluster health, a deployment-by-cluster topology grid, per-cluster rollout status, and failover history. It refreshes every few seconds and is served by the control plane itself.
 - **CLI + REST API** - Everything is available over a JSON API, and the `orkestra` CLI is a thin client for it.
 - **Direct Kubernetes API Integration** - Built on client-go, not by shelling out to `kubectl`.
 
@@ -29,7 +30,7 @@ Run the whole story locally on three [kind](https://kind.sigs.k8s.io/) clusters:
 
 ```bash
 make demo-up     # create kind clusters orkestra-a, -b, -c (~1 min)
-make demo        # run the end-to-end walkthrough
+make demo        # run the end-to-end walkthrough (open http://localhost:8080 to watch)
 make demo-down   # delete everything
 ```
 
@@ -67,7 +68,7 @@ The demo clusters' kubeconfigs are written to `.demo/`; your `~/.kube/config` is
 ```
                     ┌──────────────────────────┐
      orkestra CLI ─▶│   Orkestra Control Plane │
-       REST API     │  ┌─────────────────────┐ │
+     Dashboard  ───▶│  ┌─────────────────────┐ │
                     │  │  Cluster Registry   │ │
                     │  ├─────────────────────┤ │
                     │  │  Propagation Engine │ │
@@ -96,6 +97,7 @@ The demo clusters' kubeconfigs are written to `.demo/`; your `~/.kube/config` is
 | State Store | [`internal/store`](internal/store) | Atomic JSON persistence and restore on startup |
 | REST API | [`internal/api`](internal/api) | HTTP interface over all of the above |
 | CLI | [`cmd/orkestra`](cmd/orkestra), [`internal/client`](internal/client) | `orkestra` command; a thin client of the REST API |
+| Dashboard | [`dashboard/`](dashboard) | React + TypeScript UI polling the REST API; built to `dashboard/dist` and served at `/` |
 
 **How failover decides:** a cluster becomes eligible once it has been Unhealthy for `gracePeriodSeconds` (so brief blips don't cause flapping). The replacement is the Healthy cluster with the most ready nodes that isn't already running the deployment. If applying to the replacement fails, nothing changes and it is retried on the next cycle. Removing the old copy is best effort, since the failed cluster is usually unreachable; failures are recorded on the failover event.
 
@@ -104,6 +106,7 @@ The demo clusters' kubeconfigs are written to `.demo/`; your `~/.kube/config` is
 | Layer | Technology |
 |---|---|
 | Control Plane | Go, client-go |
+| Dashboard | React, TypeScript, Vite |
 | Multi-cluster orchestration model | Karmada-inspired design |
 | Container orchestration | Kubernetes |
 | Local environment | kind, Docker |
@@ -112,6 +115,7 @@ The demo clusters' kubeconfigs are written to `.demo/`; your `~/.kube/config` is
 
 ### Prerequisites
 - Go 1.21+
+- Node.js 20+ (only to build the dashboard)
 - One or more Kubernetes clusters (or Docker + kind for the demo)
 
 ### Build and run
@@ -121,8 +125,11 @@ git clone https://github.com/<your-username>/orkestra.git
 cd orkestra
 
 make build                                    # -> bin/orkestra
+make dashboard                                # -> dashboard/dist (optional)
 ./bin/orkestra serve --config config.yaml     # start the control plane
 ```
+
+Open http://localhost:8080 for the dashboard. Without `make dashboard` the API and CLI work as normal.
 
 ### Using the CLI
 
@@ -147,6 +154,7 @@ The kubeconfig path is read by the server, so it must exist on the machine runni
 ```yaml
 server:
   port: 8080
+  dashboardDir: dashboard/dist  # built dashboard to serve at "/"; empty = API only
 
 health:
   pollIntervalSeconds: 30     # how often clusters are health-checked
@@ -179,8 +187,9 @@ log:
 ### Development
 
 ```bash
-make test    # go test -race ./...
-make lint    # go vet ./...
+make test            # go test -race ./...
+make lint            # go vet ./...
+make dashboard-dev   # dashboard with hot reload on :5173, proxying /api to :8080
 ```
 
 ## Limitations
@@ -198,7 +207,8 @@ These are known and deliberate for the current scope:
 - [x] Deployment propagation with per-cluster status
 - [x] Failover and re-propagation on cluster health degradation
 - [x] Persistent control plane state
-- [ ] React dashboard with live cluster and deployment topology
+- [x] React dashboard with live cluster and deployment topology
+- [ ] Deploy and manage clusters from the dashboard (currently read-only)
 - [ ] Policy-based scheduling (resource-aware placement across clusters)
 - [ ] Cleanup of orphaned copies when a failed cluster recovers
 - [ ] Metrics export (Prometheus integration)

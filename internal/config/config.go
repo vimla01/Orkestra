@@ -9,6 +9,10 @@ import (
 // ServerConfig holds HTTP server configuration.
 type ServerConfig struct {
 	Port int `yaml:"port"`
+
+	// DashboardDir is the built web dashboard (dashboard/dist) to serve at
+	// "/". If empty, only the API is served.
+	DashboardDir string `yaml:"dashboardDir"`
 }
 
 // HealthConfig holds health-check polling configuration.

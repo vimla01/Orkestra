@@ -39,6 +39,14 @@ done
 step "Building Orkestra"
 go build -o "$ORK" ./cmd/orkestra
 ok "bin/orkestra"
+if [[ ! -f dashboard/dist/index.html ]]; then
+	if command -v npm >/dev/null; then
+		(cd dashboard && npm ci --silent && npm run build --silent) >/dev/null
+		ok "dashboard/dist"
+	else
+		warn "npm not found; skipping the dashboard (API and CLI still work)"
+	fi
+fi
 
 step "Starting the control plane (log: .demo/server.log)"
 if curl -sf "$ORKESTRA_SERVER/api/v1/health" >/dev/null 2>&1; then
@@ -49,6 +57,7 @@ rm -f "$DEMO_DIR/state.json"
 server_pid=$!
 wait_for "control plane to start" 20 curl -sf "$ORKESTRA_SERVER/api/v1/health"
 ok "listening on $ORKESTRA_SERVER"
+[[ -f dashboard/dist/index.html ]] && info "Dashboard: $ORKESTRA_SERVER  (open it now to watch the failover live)"
 
 step "Registering member clusters"
 for cluster in "${CLUSTERS[@]}"; do
@@ -97,6 +106,10 @@ wait_for "web to roll out after failover" 180 deployment_ready
 "$ORK" deployment status web
 
 step "Demo complete"
+if [[ -t 0 && -f dashboard/dist/index.html ]]; then
+	info "The dashboard is still live at $ORKESTRA_SERVER"
+	read -rp "    Press Enter to stop the control plane... "
+fi
 info "Server log:      .demo/server.log"
 info "Run it again:    make demo"
 info "Explore:         make demo-server   (then use bin/orkestra in another terminal)"

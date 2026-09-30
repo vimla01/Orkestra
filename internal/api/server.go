@@ -19,6 +19,7 @@ type Server struct {
 	registry   *registry.Registry
 	aggregator *health.Aggregator
 	engine     *propagation.Engine
+	router     *mux.Router
 	httpServer *http.Server
 	logger     *logrus.Logger
 }
@@ -36,6 +37,7 @@ func NewServer(port int, reg *registry.Registry, agg *health.Aggregator, engine 
 
 	r := mux.NewRouter()
 	registerRoutes(s, r)
+	s.router = r
 
 	// Apply middleware: CORS first, then logging.
 	r.Use(corsMiddleware)
@@ -50,6 +52,12 @@ func NewServer(port int, reg *registry.Registry, agg *health.Aggregator, engine 
 	}
 
 	return s
+}
+
+// ServeDashboard serves the built web dashboard from dir for every path not
+// handled by the API. It must be called before Start.
+func (s *Server) ServeDashboard(dir string) {
+	s.router.PathPrefix("/").Handler(dashboardHandler(dir))
 }
 
 // Handler returns the server's HTTP handler with all routes and middleware,

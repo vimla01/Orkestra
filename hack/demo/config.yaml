@@ -2,6 +2,7 @@
 # grace period so failover is visible within about a minute.
 server:
   port: 8080
+  dashboardDir: dashboard/dist
 
 health:
   pollIntervalSeconds: 5

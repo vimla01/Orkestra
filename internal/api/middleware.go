@@ -35,13 +35,21 @@ func loggingMiddleware(logger *logrus.Logger) mux.MiddlewareFunc {
 			next.ServeHTTP(srw, r)
 
 			duration := time.Since(start)
-			logger.WithFields(logrus.Fields{
+			entry := logger.WithFields(logrus.Fields{
 				"method":   r.Method,
 				"path":     r.URL.Path,
 				"status":   srw.statusCode,
 				"duration": duration.String(),
 				"remote":   r.RemoteAddr,
-			}).Info("Request handled")
+			})
+
+			// Successful reads are frequent (the dashboard polls), so keep
+			// them out of the default log; writes and errors stay visible.
+			if r.Method == http.MethodGet && srw.statusCode < 400 {
+				entry.Debug("Request handled")
+			} else {
+				entry.Info("Request handled")
+			}
 		})
 	}
 }
