@@ -26,6 +26,13 @@ type FailoverConfig struct {
 	GracePeriodSeconds int `yaml:"gracePeriodSeconds"`
 }
 
+// StorageConfig controls where control plane state is persisted.
+type StorageConfig struct {
+	// Path is the JSON state file. If empty, state is kept in memory only
+	// and lost on restart.
+	Path string `yaml:"path"`
+}
+
 // LogConfig holds logging configuration.
 type LogConfig struct {
 	Level string `yaml:"level"`
@@ -36,6 +43,7 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Health   HealthConfig   `yaml:"health"`
 	Failover FailoverConfig `yaml:"failover"`
+	Storage  StorageConfig  `yaml:"storage"`
 	Log      LogConfig      `yaml:"log"`
 }
 

@@ -18,6 +18,7 @@ import (
 	"github.com/orkestra/internal/k8s"
 	"github.com/orkestra/internal/propagation"
 	"github.com/orkestra/internal/registry"
+	"github.com/orkestra/internal/store"
 )
 
 func main() {
@@ -78,6 +79,31 @@ func main() {
 
 	// Create propagation engine
 	engine := propagation.NewEngine(reg, clientFactory, logger)
+
+	// Restore saved state and persist every change from here on
+	if cfg.Storage.Path != "" {
+		fileStore := store.NewFileStore(cfg.Storage.Path)
+		state, err := fileStore.Load()
+		if err != nil {
+			logger.Fatalf("Failed to load state: %v", err)
+		}
+		store.Restore(state, reg, engine)
+		logger.WithFields(logrus.Fields{
+			"path":        cfg.Storage.Path,
+			"clusters":    len(state.Clusters),
+			"deployments": len(state.Deployments),
+		}).Info("Restored control plane state")
+
+		persist := func() {
+			if err := fileStore.Persist(reg, engine); err != nil {
+				logger.WithError(err).Error("Failed to persist state")
+			}
+		}
+		reg.SetOnChange(persist)
+		engine.SetOnChange(persist)
+	} else {
+		logger.Warn("No storage path configured; state will be lost on restart")
+	}
 
 	// Create API server
 	server := api.NewServer(cfg.Server.Port, reg, aggregator, engine, logger)

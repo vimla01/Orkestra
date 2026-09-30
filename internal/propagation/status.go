@@ -69,8 +69,10 @@ func (e *Engine) saveRecord(deployment *appsv1.Deployment, clusterNames []string
 	}
 
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	e.records[recordKey(record.Namespace, record.Name)] = record
+	e.mu.Unlock()
+
+	e.notifyChange()
 }
 
 // copyRecord returns a copy of r whose slices and deployment are not shared.

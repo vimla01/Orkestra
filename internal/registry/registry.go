@@ -20,6 +20,10 @@ type Registry struct {
 	mu            sync.RWMutex
 	clusters      map[string]*ClusterInfo
 	clientFactory func(string) (kubernetes.Interface, error)
+
+	// onChange, if set, is called after a cluster is registered or
+	// deregistered, outside the lock.
+	onChange func()
 }
 
 // NewRegistry creates a new Registry with the given client factory.
@@ -29,6 +33,43 @@ func NewRegistry(clientFactory func(string) (kubernetes.Interface, error)) *Regi
 	return &Registry{
 		clusters:      make(map[string]*ClusterInfo),
 		clientFactory: clientFactory,
+	}
+}
+
+// SetOnChange sets a callback invoked after every registration or
+// deregistration, e.g. to persist the registry. Health updates do not
+// trigger it. It must be called before the registry is used concurrently.
+func (r *Registry) SetOnChange(fn func()) {
+	r.onChange = fn
+}
+
+// notifyChange invokes the onChange callback if one is set. Callers must
+// not hold r.mu, since the callback may read the registry.
+func (r *Registry) notifyChange() {
+	if r.onChange != nil {
+		r.onChange()
+	}
+}
+
+// Restore loads previously registered clusters without contacting them, so
+// the control plane can start even while some clusters are down. Health
+// state is reset to Unknown until the next health check. Clusters whose
+// name is already registered are skipped.
+func (r *Registry) Restore(clusters []*ClusterInfo) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, c := range clusters {
+		if _, exists := r.clusters[c.Name]; exists {
+			continue
+		}
+		r.clusters[c.Name] = &ClusterInfo{
+			Name:           c.Name,
+			KubeconfigPath: c.KubeconfigPath,
+			Status:         StatusUnknown,
+			RegisteredAt:   c.RegisteredAt,
+			Endpoint:       c.Endpoint,
+		}
 	}
 }
 
@@ -76,24 +117,30 @@ func (r *Registry) Register(name, kubeconfigPath string) (*ClusterInfo, error) {
 	}
 
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if _, exists := r.clusters[name]; exists {
+		r.mu.Unlock()
 		return nil, fmt.Errorf("cluster %q: %w", name, ErrClusterExists)
 	}
 	r.clusters[name] = info
-	return info, nil
+	infoCopy := *info
+	r.mu.Unlock()
+
+	r.notifyChange()
+	return &infoCopy, nil
 }
 
 // Deregister removes a cluster from the registry.
 // Returns an error if the cluster is not found.
 func (r *Registry) Deregister(name string) error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	if _, exists := r.clusters[name]; !exists {
+		r.mu.Unlock()
 		return fmt.Errorf("cluster %q not found", name)
 	}
 	delete(r.clusters, name)
+	r.mu.Unlock()
+
+	r.notifyChange()
 	return nil
 }
 

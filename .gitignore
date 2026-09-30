@@ -10,6 +10,9 @@ bin/
 *.out
 coverage.out
 
+# Local control plane state
+data/
+
 # Vendor
 vendor/
 

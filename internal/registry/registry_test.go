@@ -236,3 +236,35 @@ func TestUpdateHealthTracksUnhealthySince(t *testing.T) {
 		t.Errorf("expected UnhealthySince cleared on recovery, got %v", recovered.UnhealthySince)
 	}
 }
+
+func TestRestore(t *testing.T) {
+	r := NewRegistry(mockClientFactory)
+	kubeconfig := writeTempKubeconfig(t)
+	if _, err := r.Register("existing", kubeconfig); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	changed := false
+	r.SetOnChange(func() { changed = true })
+
+	r.Restore([]*ClusterInfo{
+		{Name: "restored", KubeconfigPath: "/nonexistent/kubeconfig", Status: StatusHealthy, ReadyNodes: 3},
+		{Name: "existing", KubeconfigPath: "/other"},
+	})
+
+	info, err := r.Get("restored")
+	if err != nil {
+		t.Fatalf("restored cluster missing: %v", err)
+	}
+	if info.Status != StatusUnknown || info.ReadyNodes != 0 {
+		t.Errorf("expected health reset to Unknown, got %+v", info)
+	}
+
+	existing, _ := r.Get("existing")
+	if existing.KubeconfigPath != kubeconfig {
+		t.Error("Restore overwrote an already-registered cluster")
+	}
+	if changed {
+		t.Error("Restore should not trigger the change callback")
+	}
+}

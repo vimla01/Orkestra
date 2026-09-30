@@ -198,15 +198,17 @@ func (e *Engine) removeFromCluster(ctx context.Context, record Record, cluster *
 // wins. It reports whether the record was updated.
 func (e *Engine) commitFailover(snapshot Record, targets []string, results []ClusterResult, events []FailoverEvent) bool {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	current, ok := e.records[recordKey(snapshot.Namespace, snapshot.Name)]
 	if !ok || !current.PropagatedAt.Equal(snapshot.PropagatedAt) {
+		e.mu.Unlock()
 		return false
 	}
 
 	current.Clusters = targets
 	current.Results = results
 	current.Failovers = append(current.Failovers, events...)
+	e.mu.Unlock()
+
+	e.notifyChange()
 	return true
 }

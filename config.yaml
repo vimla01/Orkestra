@@ -8,5 +8,8 @@ failover:
   enabled: true
   gracePeriodSeconds: 60
 
+storage:
+  path: data/orkestra.json
+
 log:
   level: info

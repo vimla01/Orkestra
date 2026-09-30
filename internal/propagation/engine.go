@@ -48,6 +48,37 @@ type Engine struct {
 
 	mu      sync.RWMutex
 	records map[string]*Record // keyed by namespace/name
+
+	// onChange, if set, is called after a record is saved or changed by
+	// failover, outside the lock.
+	onChange func()
+}
+
+// SetOnChange sets a callback invoked after every change to the
+// propagation records, e.g. to persist them. It must be called before the
+// engine is used concurrently.
+func (e *Engine) SetOnChange(fn func()) {
+	e.onChange = fn
+}
+
+// notifyChange invokes the onChange callback if one is set. Callers must
+// not hold e.mu, since the callback may read the records.
+func (e *Engine) notifyChange() {
+	if e.onChange != nil {
+		e.onChange()
+	}
+}
+
+// Restore loads previously saved propagation records, replacing any with
+// the same namespace and name.
+func (e *Engine) Restore(records []Record) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	for _, r := range records {
+		c := copyRecord(&r)
+		e.records[recordKey(c.Namespace, c.Name)] = &c
+	}
 }
 
 // NewEngine creates a new propagation Engine with the given dependencies.
